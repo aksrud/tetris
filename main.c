@@ -25,7 +25,7 @@ int brick[2] = {-1, -1}; // 블럭 저장
 
 int hold_block = -1; // 홀드 블럭
 
-int score = 3000; // 점수
+int score = 0; // 점수
 
 int stage = 1; // 스테이지
 
@@ -34,6 +34,10 @@ int frame = 20; // 프레임
 int nframe; // 실제 감소프레임
 
 float wating; // 바닥에 닿을때 시간
+
+int blockBag[14] = {0};
+
+int bagCount = 0;
 
 BOOL isHold = FALSE; // 홀드 하고 있나
 BOOL isOut = FALSE; // 홀드한걸 꺼냈나
@@ -55,14 +59,15 @@ void changeStage(); // 점수와 스테이지 갱신
 void ssScreen(); // 점수와 스테이지를 보여주는 화면
 
 int main() {
+	randomize(); // 랜덤 시드 변경
 	mainSound(1);
+	suffleBag(blockBag);
 	start();
 	return 0;
 }
 
 void start() {
 	setcursortype(NOCURSOR); // 커서 없애기
-	randomize(); // 랜덤 시드 변경
 	clrscr(); // 화면 클리어
 
 	frame = 20;
@@ -76,11 +81,24 @@ void start() {
 
 	while (1) {
 		if (!isOut) {
-			if (brick[0] == -1)
+			/*if (brick[0] == -1)
 				brick[0] = random(sizeof(blocks) / sizeof(blocks[0]));
 			else
 				brick[0] = brick[1];
-			brick[1] = random(sizeof(blocks) / sizeof(blocks[0]));
+			brick[1] = random(sizeof(blocks) / sizeof(blocks[0]));*/
+			if (brick[0] == -1) {
+				brick[0] = blockBag[bagCount];
+				bagCount = bagCount + 1;
+			}
+			else {
+				brick[0] = brick[1];
+			}
+			brick[1] = blockBag[bagCount];
+			bagCount = bagCount + 1;
+			if (bagCount == 14){
+				suffleBag(blockBag);
+				bagCount = 0;
+			}
 		}
 		isOut = FALSE;
 		changeStage();
@@ -211,12 +229,19 @@ BOOL moveDown() { // 아래로 블럭 내리기
 				check = time(NULL);
 				processKey();
 			}
+			if (getAround(cx, cy + 1, rot) == EMPTY) {
+				isForce = TRUE;
+				while (moveDown() == FALSE) {}	// 블록을 바닥으로 즉시 내린다.
+				playSoundHardDrop();
+			}
 			isDown = FALSE;
 			if (wating == -1) { // 바닥에서 홀드 버튼을 누를떄 예외 처리
 				return TRUE;
 			}
 		}
 		testFull();		// 삭제할 것이 있는지 검사한다.
+		if (!isForce)
+			playSoundSoftDrop();
 		isHold = FALSE;
 		return TRUE;	// 이동이 끝나면 true를 반환
 	}
@@ -276,6 +301,15 @@ BOOL processKey() { // 게임 중 키 입력
 						if (getAround(cx - i, cy, trot) == EMPTY) {	// 벽돌 회전이 가능한 위치인지 검사
 							printBrick(FALSE);	// 벽돌 삭제 (회전하기 전)
 							cx -= i;
+							rot = trot;		// 회전값을 대입
+							printBrick(TRUE);	// 벽돌 출력 (회전이 적용된 모양)
+							playSoundRotate();
+							wating += 0.05;
+							return FALSE;
+						}
+						if (getAround(cx, cy - i, trot) == EMPTY) {	// 벽돌 회전이 가능한 위치인지 검사
+							printBrick(FALSE);	// 벽돌 삭제 (회전하기 전)
+							cy -= i;
 							rot = trot;		// 회전값을 대입
 							printBrick(TRUE);	// 벽돌 출력 (회전이 적용된 모양)
 							playSoundRotate();
@@ -342,16 +376,24 @@ BOOL processKey() { // 게임 중 키 입력
 								wating += 0.05;
 								return FALSE;
 							}
+							if (getAround(cx, cy - i, trot) == EMPTY) {	// 벽돌 회전이 가능한 위치인지 검사
+								printBrick(FALSE);	// 벽돌 삭제 (회전하기 전)
+								cy -= i;
+								rot = trot;		// 회전값을 대입
+								printBrick(TRUE);	// 벽돌 출력 (회전이 적용된 모양)
+								playSoundRotate();
+								wating += 0.05;
+								return FALSE;
+							}
 						}
 					}
 				}
 				break;
 			case DOWN:
 				if (!isDown) {
-					if (moveDown()) {// 아래로 한 칸 내림.
-						playSoundSoftDrop(); //추가
+					wating -= 0.05;
+					if (moveDown()) // 아래로 한 칸 내림.
 						return TRUE;
-					}
 				}
 				break;
 			}
@@ -411,9 +453,6 @@ void testFull() { // 채워진 줄 있는지 검사
 		playSoundLine();
 		drawBoard(); // 블럭을 다시 그린다.
 		isLine = FALSE;
-	}
-	else {
-		playSoundHardDrop();
 	}
 }
 

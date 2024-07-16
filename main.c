@@ -1,5 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include "block.h"
+#include "sound.h"
 
 #define LEFT 75	// 왼쪽 방향키
 #define RIGHT 77// 오른쪽 방향키
@@ -8,6 +9,10 @@
 #define ESC 27	// ESC 
 #define C 67 // C
 #define Z 90 // Z
+#define ENTER 13 // 엔터
+
+#define TOPX 15 // 타이틀 x
+#define TOPY 2 // 타이틀 y
 
 #define BX 40	// 외부 벽 X의 좌상단 좌표
 #define BY 3	// 외부 벽 Y의 좌상단 좌표
@@ -18,32 +23,30 @@
 int board[BW + 2][BH + 2]; // 게임판
 
 int cx, cy; // 현재 위치
-
 int rot; // 회전
-
 int brick[2] = {-1, -1}; // 블럭 저장
-
 int hold_block = -1; // 홀드 블럭
 
 int score = 0; // 점수
-
 int stage = 1; // 스테이지
 
 int frame = 20; // 프레임
-
 int nframe; // 실제 감소프레임
 
 float wating; // 바닥에 닿을때 시간
 
-int blockBag[14] = {0};
+int blockBag[14] = {0}; // 블록 랜덤 주머니
+int bagCount = 0; // 랜덤 주머니 꽉찼는지 확인
 
-int bagCount = 0;
+int cursor = 0; // 타이틀 커서
+int selectStage = 1; // 선택 스테이지
 
 BOOL isHold = FALSE; // 홀드 하고 있나
 BOOL isOut = FALSE; // 홀드한걸 꺼냈나
 BOOL isLine = FALSE; // 라인 클리어
 BOOL isDown = FALSE; // 바닥에 닿았는가
 BOOL isForce = FALSE; // 스페이스바 누르면 바로 내려가는 것
+BOOL isSelectLevel = FALSE; // 레벨 고르기 선택
 
 void drawScreen(); // 전체 스크린
 void drawBoard(); // 블럭 스크린
@@ -58,16 +61,75 @@ void hold(); // 홀드하고 있는 블럭 보여주는 화면
 void changeStage(); // 점수와 스테이지 갱신
 void ssScreen(); // 점수와 스테이지를 보여주는 화면
 
+// 타이틀 조작
+void title();
+void titleText();
+void titleKey();
+void selectLevelText();
+void selectLevelKey();
+
+void gameOver(); // 게임 오버
+void winGame(); // 이김
+
 int main() {
 	randomize(); // 랜덤 시드 변경
-	mainSound(1);
-	suffleBag(blockBag);
+	setcursortype(NOCURSOR); // 커서 없애기
+	title();
 	start();
+	setcursortype(NORMALCURSOR);	// 게임 종료 후 커서를 표시
 	return 0;
 }
 
+void titleText() {
+	gotoxy(TOPX + 42, TOPY + 15);
+	printf("START");
+	gotoxy(TOPX + 42, TOPY + 17);
+	printf("SELECT LEVEL");
+}
+
+void selectLevelText() {
+	gotoxy(TOPX + 42, TOPY + 15);
+	printf("YOUR LEVEL : %d", selectStage);
+}
+
+void title() {
+	while (1) {
+		if (cursor != -1) {
+			printTitleScreen(TOPX, TOPY);
+			gotoxy(TOPX + 38, TOPY + 15 + cursor * 2);
+			printf("> >");
+			if (!isSelectLevel) {
+				titleText();
+				titleKey();
+			}
+			else {
+				selectLevelText();
+				selectLevelKey();
+			}
+		}
+		else {
+			break;
+		}
+	}
+}
+
+void winGame() {
+	mainSound(0);
+	clrscr();	// 화면 청소
+	gotoxy(30, 9); puts("G A M E  S U C C E S S!!!!!");
+	playSoundSuccess();
+	delay(2000);
+}
+
+void gameOver() {
+	mainSound(0);
+	clrscr();	// 화면 청소
+	gotoxy(30, 9); puts("G A M E  O V E R");
+	playSoundGameOver();
+	delay(3600);
+}
+
 void start() {
-	setcursortype(NOCURSOR); // 커서 없애기
 	clrscr(); // 화면 클리어
 
 	frame = 20;
@@ -78,8 +140,12 @@ void start() {
 	}
 
 	drawScreen();
-
+	mainSound(1);
 	while (1) {
+		if (score == 10000) {
+			winGame();
+			return;
+		}
 		if (!isOut) {
 			/*if (brick[0] == -1)
 				brick[0] = random(sizeof(blocks) / sizeof(blocks[0]));
@@ -87,6 +153,7 @@ void start() {
 				brick[0] = brick[1];
 			brick[1] = random(sizeof(blocks) / sizeof(blocks[0]));*/
 			if (brick[0] == -1) {
+				suffleBag(blockBag);
 				brick[0] = blockBag[bagCount];
 				bagCount = bagCount + 1;
 			}
@@ -108,11 +175,12 @@ void start() {
 		ssScreen();
 
 		cx = BW / 2 - 1; // 이동중인 벽돌의 x좌표
-		cy = BY;	// 이동중인 벽돌의 y좌표
+		cy = BY - 3;	// 이동중인 벽돌의 y좌표
 		rot = 0; // 회전을 하지 않은 상태
 
 		printBrick(TRUE);	// 벽돌을 출력
 		if (getAround(cx, cy, rot) != EMPTY) break;
+
 		// 블록 뽑고 난후
 		nframe = frame;
 		while (1) {
@@ -126,11 +194,7 @@ void start() {
 			delay(1000 / 20);
 		}
 	}
-	mainSound(0);
-	clrscr();	// 화면 청소
-	gotoxy(30, 9); puts("G A M E  O V E R");
-	Sleep(2000);	// 2초후 프로그램 종료
-	setcursortype(NORMALCURSOR);	// 게임 종료 후 커서를 표시
+	gameOver();
 }
 
 void next() { // 다음 블록 보여주는 화면
@@ -197,8 +261,10 @@ void printBrick(BOOL show) { // 블록 그리는 부분
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if (blocks[brick[0]][rot][i][j]) {
-				gotoxy(BX + (j + cx) * 2, BY + i + cy);
-				printf(arTile[show ? BRICK : EMPTY]);
+				if (BY + i + cy > BY) {
+					gotoxy(BX + (j + cx) * 2, BY + i + cy);
+					printf(arTile[show ? BRICK : EMPTY]);
+				}
 			}
 		}
 	}
@@ -208,8 +274,10 @@ int getAround(int x, int y, int r){	// 벽돌 주변의 지형 검사
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if (blocks[brick[0]][r][i][j]) {
-				if (board[x + j][y + i]) {
-					return WALL;
+				if (y + i > 0) {
+					if (board[x + j][y + i]) {
+						return WALL;
+					}
 				}
 			}
 		}
@@ -474,7 +542,7 @@ void ssScreen() {
 }
 
 void changeStage() {
-	stage = (int)(score / 1000) + 1;
+	stage = (int)(score / 1000) + selectStage;
 	if (stage > 10) {
 		stage = 10;
 	}
@@ -482,5 +550,77 @@ void changeStage() {
 	frame -= (stage - 1) * 2;
 	if (frame < 4) {
 		frame = 4;
+	}
+}
+
+void selectLevelKey() {
+	int ch;
+	if (_kbhit()) {
+		ch = _getch();
+		if (ch == ENTER) {
+			isSelectLevel = FALSE; // 선택 됨
+			playSoundHold();
+			clrscr();
+		}
+		if (ch == 0xE0 || ch == 0) {
+			ch = _getch();
+			switch (ch) {
+			case UP:
+				if (selectStage != 10) {
+					selectStage = selectStage + 1;
+				}
+				else {
+					selectStage = 1;
+				}
+				playSoundHold();
+				clrscr();
+				break;
+			case DOWN:
+				if (selectStage != 1) {
+					selectStage = selectStage - 1;
+				}
+				else {
+					selectStage = 10;
+				}
+				playSoundHold();
+				clrscr();
+				break;
+			}
+		}
+	}
+}
+
+void titleKey() {
+	int ch;
+	if (_kbhit()) {
+		ch = _getch();
+		if (ch == ENTER) {
+			if (cursor == 0) {
+				cursor = -1; // 시작하러 ㄱㄱ
+				playSoundHold();
+				clrscr();
+			}
+			else {
+				isSelectLevel = TRUE; // 레벨 선택 ㄱㄱ
+				cursor = 0;
+				playSoundHold();
+				clrscr();
+			}
+		}
+		if (ch == 0xE0 || ch == 0) {
+			ch = _getch();
+			switch (ch) {
+			case UP:
+				cursor = (cursor == 0 ? 1 : 0);
+				playSoundHold();
+				clrscr();
+				break;
+			case DOWN:
+				cursor = (cursor == 1 ? 0 : 1);
+				playSoundHold();
+				clrscr();
+				break;
+			}
+		}
 	}
 }

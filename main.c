@@ -114,18 +114,18 @@ void title() {
 }
 
 void winGame() {
-	mainSound(0);
+	//mainSound(0);
 	clrscr();	// 拳搁 没家
 	gotoxy(30, 9); puts("G A M E  S U C C E S S!!!!!");
-	playSoundSuccess();
+	//playSoundSuccess();
 	delay(2000);
 }
 
 void gameOver() {
-	mainSound(0);
+	//mainSound(0);
 	clrscr();	// 拳搁 没家
 	gotoxy(30, 9); puts("G A M E  O V E R");
-	playSoundGameOver();
+	//playSoundGameOver();
 	delay(3600);
 }
 
